@@ -7,11 +7,12 @@ import os
 
 
 class Cache(object):
-    def __init__(self, path):
+    def __init__(self, path=None):
         self.path = path
         self.db = self.open()
+        self.filter = list(self.load_filter())
 
-    def ensure_exists(self, path):
+    def ensure_exists(self):
         os.makedirs(self.path, exist_ok=True)
 
     def open(self):
@@ -22,6 +23,40 @@ class Cache(object):
         else:
             return NullStore(self.path)
 
+    def load_filter(self):
+        if self.path:
+            self.ensure_exists()
+            path = os.path.join(self.path, 'cacheignore')
+            try:
+                with open(path) as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith('#'):
+                            continue
+                        yield line
+            except FileNotFoundError:
+                pass
+
+    def add(self, path, **kwargs):
+        multihash = self.try_cache(path, lambda path: ipfs_add(path), **kwargs)
+        return multihash
+
+    def try_cache(self, path, func, skip_cache=False):
+        if skip_cache:
+            multihash = func(path)
+            log('[+] added (NOCACHE): %r -> %s' % (path, multihash))
+            return multihash
+
+        multihash = self.db.get(path)
+        if multihash:
+            log('[+] found (HIT): %r -> %s' % (path, multihash))
+            return multihash
+        else:
+            multihash = func(path)
+            log('[+] added (MISS): %r -> %s' % (path, multihash))
+            self.db.put(path, multihash)
+            return multihash
+
     def close(self):
         self.db.close()
 
@@ -30,6 +65,42 @@ class Cache(object):
 
     def put(self, key, value):
         return self.db.put(key, value)
+
+
+class FolderWalker(object):
+    def __init__(self, root, cache=None):
+        self.root = root
+        if not cache:
+            cache = Cache(cache)
+        self.cache = cache
+
+    def add(self, path):
+        skip_cache = self.bypasses_cache(path)
+        return self.cache.add(path, skip_cache=skip_cache)
+
+    def traverse(self):
+        tree = {}
+        for root, subs, files in os.walk(self.root):
+            folder_content = self._process_folder(root, files)
+            obj = {
+                'folders': subs,
+                'files': folder_content
+            }
+            tree[root] = obj
+        return tree
+
+    def _process_folder(self, root, files):
+        def process(root, files):
+            for name in files:
+                path = os.path.join(root, name)
+                multihash = self.add(path)
+                yield name, multihash
+
+        return {name: multihash for name, multihash in process(root, files)}
+
+    def bypasses_cache(self, path):
+        relative = path[len(self.root):]
+        return any(relative.startswith(x) for x in self.cache.filter)
 
 
 class NullStore(object):
@@ -88,40 +159,16 @@ def empty():
 
 
 def ipfs_add(path):
-    multihash = ipfs(['add', '-q', '--', path])
-    log('[+] added %r -> %s' % (path, multihash))
-    return multihash
+    return ipfs(['add', '-q', '--', path])
 
 
-def try_cache(db, path):
-    multihash = db.get(path)
-
-    if multihash:
-        log('[+] found %r -> %s' % (path, multihash))
-    else:
-        multihash = ipfs_add(path)
-        db.put(path, multihash)
-
-    return multihash
-
-
-def store_factory(db):
-    if db:
-        if type(db) is str:
-            db = LevelDBStore(db, implicit_close=True)
-    else:
-        db = NullStore(None)
-
-    return db
-
-
-@arg('--db')
-def add(path, db=None):
+@arg('--cache', metavar='path', help='cache location')
+def add(path, cache=None):
     'Get ipfs path for file'
 
-    db = store_factory(db)
-    multihash = try_cache(db, path)
-    db.implicit_close()
+    cache = Cache(cache)
+    multihash = cache.add(path)
+    cache.close()
 
     return multihash
 
@@ -129,19 +176,6 @@ def add(path, db=None):
 def merge(root, name, multihash):
     'Merge folder into another folder'
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
-
-
-def process_folder(root, files, cache=None):
-    if cache:
-        cache = cache.db
-
-    def process(root, files):
-        for name in files:
-            path = os.path.join(root, name)
-            multihash = add(path, db=cache)
-            yield name, multihash
-
-    return {name: multihash for name, multihash in process(root, files)}
 
 
 def ipfs_patch_dir(content):
@@ -168,16 +202,8 @@ def mirror(folder, cache=None):
     'Mirror a folder'
 
     cache = Cache(cache)
-
-    tree = {}
-    for root, subs, files in os.walk(folder):
-        folder_content = process_folder(root, files, cache=cache)
-        obj = {
-            'folders': subs,
-            'files': folder_content
-        }
-        tree[root] = obj
-
+    walker = FolderWalker(folder, cache)
+    tree = walker.traverse()
     cache.close()
 
     return resolve(folder, tree)
