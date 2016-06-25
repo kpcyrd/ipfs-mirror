@@ -6,6 +6,32 @@ import sys
 import os
 
 
+class Cache(object):
+    def __init__(self, path):
+        os.makedirs(path, exist_ok=True)
+        self.path = path
+        self.db = self.open()
+
+    def open(self):
+        path = os.path.join(self.path, 'cache.db')
+        return plyvel.DB(path, create_if_missing=True)
+
+    def close(self):
+        self.db.close()
+
+    def get(self, key):
+        key = bytes(key, 'utf8')
+        value = self.db.get(key)
+        if value:
+            value = str(value, 'utf8')
+        return value
+
+    def put(self, key, value):
+        key = bytes(key, 'utf8')
+        value = bytes(value, 'utf8')
+        return self.db.put(key, value)
+
+
 def log(line):
     print(line, file=sys.stderr)
 
@@ -68,7 +94,7 @@ def merge(root, name, multihash):
 
 def process_folder(root, files, cache=None):
     if cache:
-        cache = os.path.join(cache, 'cache.db')
+        cache = cache.db
 
     def process(root, files):
         for name in files:
@@ -101,6 +127,10 @@ def resolve(root, tree):
 @arg('--cache', metavar='path', help='cache location')
 def mirror(folder, cache=None):
     'Mirror a folder'
+
+    if cache:
+        cache = Cache(cache)
+
     tree = {}
     for root, subs, files in os.walk(folder):
         folder_content = process_folder(root, files, cache=cache)
@@ -109,6 +139,9 @@ def mirror(folder, cache=None):
             'files': folder_content
         }
         tree[root] = obj
+
+    if cache:
+        cache.close()
 
     return resolve(folder, tree)
 
