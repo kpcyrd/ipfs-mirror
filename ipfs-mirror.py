@@ -30,6 +30,10 @@ def add(path):
     return multihash
 
 
+def merge(root, name, multihash):
+    return ipfs(['object', 'patch', root, 'add-link', name, multihash])
+
+
 def process_folder(root, files):
     def process(root, files):
         for name in files:
@@ -43,7 +47,7 @@ def process_folder(root, files):
 def ipfs_patch_dir(content):
     folder = ipfs_new_dir()
     for name, multihash in content.items():
-        folder = ipfs(['object', 'patch', folder, 'add-link', name, multihash])
+        folder = merge(folder, name, multihash)
     return folder
 
 
@@ -74,7 +78,7 @@ def mirror(folder):
 
 def main():
     parser = ArghParser(description='todo')
-    parser.add_commands([mirror, add])
+    parser.add_commands([mirror, add, merge])
     dispatch(parser)
 
 if __name__ == '__main__':
