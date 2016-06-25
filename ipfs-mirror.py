@@ -41,8 +41,8 @@ class Cache(object):
         multihash = self.try_cache(path, lambda path: ipfs_add(path), **kwargs)
         return multihash
 
-    def try_cache(self, path, func, skip_cache=False):
-        if skip_cache:
+    def try_cache(self, path, func, root=None):
+        if skips_cache(root, path):
             multihash = func(path)
             log('[+] added (NOCACHE): %r -> %s' % (path, multihash))
             return multihash
@@ -56,6 +56,11 @@ class Cache(object):
             log('[+] added (MISS): %r -> %s' % (path, multihash))
             self.db.put(path, multihash)
             return multihash
+
+    def skips_cache(self, root, path):
+        if root:
+            relative = path[len(root):]
+            return any(relative.startswith(x) for x in self.filter)
 
     def close(self):
         self.db.close()
@@ -75,8 +80,7 @@ class FolderWalker(object):
         self.cache = cache
 
     def add(self, path):
-        skip_cache = self.bypasses_cache(path)
-        return self.cache.add(path, skip_cache=skip_cache)
+        return self.cache.add(path, root=self.root)
 
     def traverse(self):
         tree = {}
@@ -97,10 +101,6 @@ class FolderWalker(object):
                 yield name, multihash
 
         return {name: multihash for name, multihash in process(root, files)}
-
-    def bypasses_cache(self, path):
-        relative = path[len(self.root):]
-        return any(relative.startswith(x) for x in self.cache.filter)
 
 
 class NullStore(object):
