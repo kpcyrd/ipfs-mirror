@@ -209,9 +209,17 @@ def mirror(folder, cache=None):
     return resolve(folder, tree)
 
 
+def init(path):
+    'Initialize cache'
+    cache = Cache(path)
+    ignore = os.path.join(path, 'cacheignore')
+    with open(ignore, 'w'):
+        pass
+
+
 def main():
     parser = ArghParser(description='todo')
-    parser.add_commands([mirror, add, empty, merge])
+    parser.add_commands([mirror, add, empty, merge, init])
     dispatch(parser)
 
 if __name__ == '__main__':
