@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-from argh import ArghParser, dispatch
+from argh import ArghParser, arg, dispatch
+import plyvel
 import subprocess
 import sys
 import os
@@ -21,14 +22,42 @@ def empty():
 
 
 def ipfs_add(path):
-    return ipfs(['add', '-q', '--', path])
-
-
-def add(path):
-    'Get ipfs path for file'
-    # TODO: caching
-    multihash = ipfs_add(path)
+    multihash = ipfs(['add', '-q', '--', path])
     log('[+] added %r -> %s' % (path, multihash))
+    return multihash
+
+
+def try_cache(db, path):
+    key = bytes(path, 'utf8')
+    multihash = db.get(key)
+
+    if multihash:
+        multihash = str(multihash, 'utf8')
+        log('[+] found %r -> %s' % (path, multihash))
+    else:
+        multihash = ipfs_add(path)
+        db.put(key, bytes(multihash, 'utf8'))
+
+    return multihash
+
+
+@arg('--db')
+def add(path, db=None):
+    'Get ipfs path for file'
+
+    if db:
+        keep_open = True
+        if type(db) is str:
+            db = plyvel.DB(db, create_if_missing=True)
+            keep_open = False
+
+        multihash = try_cache(db, path)
+
+        if not keep_open:
+            db.close()
+    else:
+        multihash = ipfs_add(path)
+
     return multihash
 
 
