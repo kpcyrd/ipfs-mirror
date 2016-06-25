@@ -8,16 +8,56 @@ import os
 
 class Cache(object):
     def __init__(self, path):
-        os.makedirs(path, exist_ok=True)
         self.path = path
         self.db = self.open()
 
+    def ensure_exists(self, path):
+        os.makedirs(self.path, exist_ok=True)
+
     def open(self):
-        path = os.path.join(self.path, 'cache.db')
-        return plyvel.DB(path, create_if_missing=True)
+        if self.path:
+            self.ensure_exists()
+            path = os.path.join(self.path, 'cache.db')
+            return LevelDBStore(path)
+        else:
+            return NullStore(self.path)
 
     def close(self):
         self.db.close()
+
+    def get(self, key):
+        return self.db.get(key)
+
+    def put(self, key, value):
+        return self.db.put(key, value)
+
+
+class NullStore(object):
+    def __init__(self, path):
+        self._implicit_close = False
+        pass
+
+    def implicit_close(self):
+        if self._implicit_close:
+            self.close()
+
+    def close(self):
+        pass
+
+    def get(self, key):
+        pass
+
+    def put(self, key, value):
+        pass
+
+
+class LevelDBStore(NullStore):
+    def __init__(self, path, implicit_close=False):
+        self.db = plyvel.DB(path, create_if_missing=True)
+        self._implicit_close = implicit_close
+
+    def close(self):
+        return self.db.close()
 
     def get(self, key):
         key = bytes(key, 'utf8')
@@ -54,35 +94,34 @@ def ipfs_add(path):
 
 
 def try_cache(db, path):
-    key = bytes(path, 'utf8')
-    multihash = db.get(key)
+    multihash = db.get(path)
 
     if multihash:
-        multihash = str(multihash, 'utf8')
         log('[+] found %r -> %s' % (path, multihash))
     else:
         multihash = ipfs_add(path)
-        db.put(key, bytes(multihash, 'utf8'))
+        db.put(path, multihash)
 
     return multihash
+
+
+def store_factory(db):
+    if db:
+        if type(db) is str:
+            db = LevelDBStore(db, implicit_close=True)
+    else:
+        db = NullStore(None)
+
+    return db
 
 
 @arg('--db')
 def add(path, db=None):
     'Get ipfs path for file'
 
-    if db:
-        keep_open = True
-        if type(db) is str:
-            db = plyvel.DB(db, create_if_missing=True)
-            keep_open = False
-
-        multihash = try_cache(db, path)
-
-        if not keep_open:
-            db.close()
-    else:
-        multihash = ipfs_add(path)
+    db = store_factory(db)
+    multihash = try_cache(db, path)
+    db.implicit_close()
 
     return multihash
 
@@ -128,8 +167,7 @@ def resolve(root, tree):
 def mirror(folder, cache=None):
     'Mirror a folder'
 
-    if cache:
-        cache = Cache(cache)
+    cache = Cache(cache)
 
     tree = {}
     for root, subs, files in os.walk(folder):
@@ -140,8 +178,7 @@ def mirror(folder, cache=None):
         }
         tree[root] = obj
 
-    if cache:
-        cache.close()
+    cache.close()
 
     return resolve(folder, tree)
 
