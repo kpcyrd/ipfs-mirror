@@ -66,11 +66,14 @@ def merge(root, name, multihash):
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
 
 
-def process_folder(root, files):
+def process_folder(root, files, cache=None):
+    if cache:
+        cache = os.path.join(cache, 'cache.db')
+
     def process(root, files):
         for name in files:
             path = os.path.join(root, name)
-            multihash = add(path)
+            multihash = add(path, db=cache)
             yield name, multihash
 
     return {name: multihash for name, multihash in process(root, files)}
@@ -95,11 +98,12 @@ def resolve(root, tree):
     return resolved
 
 
-def mirror(folder):
+@arg('--cache', metavar='path', help='cache location')
+def mirror(folder, cache=None):
     'Mirror a folder'
     tree = {}
     for root, subs, files in os.walk(folder):
-        folder_content = process_folder(root, files)
+        folder_content = process_folder(root, files, cache=cache)
         obj = {
             'folders': subs,
             'files': folder_content
