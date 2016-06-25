@@ -4,14 +4,16 @@ ipfs mirror utils with leveldb cache for immutable files
 
 ## Abstract
 
-ipfs-mirror mostly mimics `ipfs add -r`, except that you can control if it's going to recalculate a hash or use a cached hash. This is useful if you have a large volume of files and you already know which files don't change their content and therefore don't need to be recalculate a hash.
+ipfs-mirror mostly mimics `ipfs add -r`, except that you have cache control with a list of known mutable files. If you add a folder for the first time while using a cache, it's adding the file to ipfs, then store the hash in leveldb. When mirroring the folder again, it's using the hashes found in leveldb, unless it's marked as dynamic file, which are always re-added.
+
+This is useful when mirroring large files into ipfs of which most don't need to be re-hashed.
 
 Add a folder to ipfs recursively:
 ```
 ipfs-mirror mirror --cache ~/.ipfs-mirror debian/ 2>/dev/null
 ```
 
-Add a folder to ipfs, cache every file by name:
+Add a folder to ipfs, cache every file by path:
 ```
 ipfs-mirror mirror --cache ~/.ipfs-mirror debian/ 2>/dev/null
 ```
