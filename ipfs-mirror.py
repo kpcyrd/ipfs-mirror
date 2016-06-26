@@ -42,7 +42,7 @@ class Cache(object):
         return multihash
 
     def try_cache(self, path, func, root=None):
-        if skips_cache(root, path):
+        if self.skips_cache(root, path):
             multihash = func(path)
             log('[+] added (NOCACHE): %r -> %s' % (path, multihash))
             return multihash
@@ -105,12 +105,7 @@ class FolderWalker(object):
 
 class NullStore(object):
     def __init__(self, path):
-        self._implicit_close = False
         pass
-
-    def implicit_close(self):
-        if self._implicit_close:
-            self.close()
 
     def close(self):
         pass
@@ -123,9 +118,8 @@ class NullStore(object):
 
 
 class LevelDBStore(NullStore):
-    def __init__(self, path, implicit_close=False):
+    def __init__(self, path):
         self.db = plyvel.DB(path, create_if_missing=True)
-        self._implicit_close = implicit_close
 
     def close(self):
         return self.db.close()
