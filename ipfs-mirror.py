@@ -42,7 +42,7 @@ class Cache(object):
         return multihash
 
     def try_cache(self, path, func, root=None):
-        log_n('[+] %r ... ' % path)
+        log_n('[+] %-100r ... ' % path)
 
         if self.skips_cache(root, path):
             log_n('NOCACHE ... ')
