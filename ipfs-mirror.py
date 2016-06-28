@@ -153,7 +153,7 @@ def empty():
 
 
 def ipfs_add(path):
-    return ipfs(['add', '-q', '--', path])
+    return ipfs(['add', '-q', '--progress=false', '--', path])
 
 
 @arg('--cache', metavar='path', help='cache location')
