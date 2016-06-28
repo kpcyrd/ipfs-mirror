@@ -46,6 +46,7 @@ class Cache(object):
 
         if self.skips_cache(root, path):
             log_n('NOCACHE ... ')
+            log_size(path)
             multihash = func(path)
         else:
             multihash = self.db.get(path)
@@ -53,6 +54,7 @@ class Cache(object):
                 log_n('HIT ...')
             else:
                 log_n('MISS ... ')
+                log_size(path)
                 multihash = func(path)
                 self.db.put(path, multihash)
 
@@ -147,6 +149,20 @@ def log(line):
 
 def log_n(chunk):
     print(chunk, end='', flush=True, file=sys.stderr)
+
+
+def human_size(num, suffix='B'):
+    for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
+        if abs(num) < 1024.0:
+            return '%3.1f %s%s' % (num, unit, suffix)
+        num /= 1024.0
+    return '%.1f %s%s' % (num, 'Yi', suffix)
+
+
+def log_size(path):
+    size = os.path.getsize(path)
+    size = human_size(size)
+    log_n('%s ... ' % size)
 
 
 def ipfs(cmd):
