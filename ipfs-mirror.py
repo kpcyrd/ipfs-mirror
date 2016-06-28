@@ -42,20 +42,22 @@ class Cache(object):
         return multihash
 
     def try_cache(self, path, func, root=None):
-        if self.skips_cache(root, path):
-            multihash = func(path)
-            log('[+] added (NOCACHE): %r -> %s' % (path, multihash))
-            return multihash
+        log_n('[+] %r ... ' % path)
 
-        multihash = self.db.get(path)
-        if multihash:
-            log('[+] found (HIT): %r -> %s' % (path, multihash))
-            return multihash
-        else:
+        if self.skips_cache(root, path):
+            log_n('NOCACHE ... ')
             multihash = func(path)
-            log('[+] added (MISS): %r -> %s' % (path, multihash))
-            self.db.put(path, multihash)
-            return multihash
+        else:
+            multihash = self.db.get(path)
+            if multihash:
+                log_n('HIT ...')
+            else:
+                log_n('MISS ... ')
+                multihash = func(path)
+                self.db.put(path, multihash)
+
+        log('%r' % multihash)
+        return multihash
 
     def skips_cache(self, root, path):
         if root:
@@ -139,6 +141,10 @@ class LevelDBStore(NullStore):
 
 def log(line):
     print(line, file=sys.stderr)
+
+
+def log_n(chunk):
+    print(chunk, end='', flush=True, file=sys.stderr)
 
 
 def ipfs(cmd):
