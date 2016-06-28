@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from argh import ArghParser, arg, dispatch
+from argh import ArghParser, arg, dispatch, wrap_errors
 import plyvel
 import subprocess
 import sys
@@ -153,6 +153,7 @@ def ipfs(cmd):
     return output
 
 
+@wrap_errors([KeyboardInterrupt])
 def empty():
     'Create empty folder'
     return ipfs(['object', 'new', 'unixfs-dir'])
@@ -163,6 +164,7 @@ def ipfs_add(path):
 
 
 @arg('--cache', metavar='path', help='cache location')
+@wrap_errors([KeyboardInterrupt])
 def add(path, cache=None):
     'Get ipfs path for file'
 
@@ -173,6 +175,7 @@ def add(path, cache=None):
     return multihash
 
 
+@wrap_errors([KeyboardInterrupt])
 def merge(root, name, multihash):
     'Merge folder into another folder'
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
@@ -198,6 +201,7 @@ def resolve(root, tree):
 
 
 @arg('--cache', metavar='path', help='cache location')
+@wrap_errors([KeyboardInterrupt])
 def mirror(folder, cache=None):
     'Mirror a folder'
 
@@ -209,6 +213,7 @@ def mirror(folder, cache=None):
     return resolve(folder, tree)
 
 
+@wrap_errors([KeyboardInterrupt])
 def init(path):
     'Initialize cache'
     cache = Cache(path)
