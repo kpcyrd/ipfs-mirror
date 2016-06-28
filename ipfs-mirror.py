@@ -62,7 +62,9 @@ class Cache(object):
     def skips_cache(self, root, path):
         if root:
             relative = path[len(root):]
-            return any(relative.startswith(x) for x in self.filter)
+            if any(relative.startswith(x) for x in self.filter):
+                return True
+            return os.path.basename(path) in self.filter
 
     def close(self):
         self.db.close()
