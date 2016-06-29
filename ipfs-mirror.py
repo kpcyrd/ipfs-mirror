@@ -7,9 +7,10 @@ import os
 
 
 class Cache(object):
-    def __init__(self, path=None):
+    def __init__(self, path=None, progress=None):
         self.path = path
         self.db = self.open()
+        self.progress = progress
         self.filter = list(self.load_filter())
 
     def ensure_exists(self):
@@ -42,23 +43,24 @@ class Cache(object):
         return multihash
 
     def try_cache(self, path, func, root=None):
-        log_n('[+] %-100r ... ' % path)
+        self.progress.log_n('[+] %-100r ... ' % path)
 
         if self.skips_cache(root, path):
-            log_n('NOCACHE ... ')
-            log_size(path)
+            self.progress.log_n('NOCACHE ... ')
+            self.progress.log_size(path)
             multihash = func(path)
         else:
             multihash = self.db.get(path)
             if multihash:
-                log_n('HIT ...')
+                self.progress.log_n('HIT ...')
             else:
-                log_n('MISS ... ')
-                log_size(path)
+                self.progress.log_n('MISS ... ')
+                self.progress.log_size(path)
                 multihash = func(path)
                 self.db.put(path, multihash)
 
-        log('%r' % multihash)
+        self.progress.increase()
+        self.progress.log('%r' % multihash)
         return multihash
 
     def skips_cache(self, root, path):
@@ -79,17 +81,22 @@ class Cache(object):
 
 
 class FolderWalker(object):
-    def __init__(self, root, cache=None):
+    def __init__(self, root, cache=None, progress=None):
         self.root = root
         if not cache:
             cache = Cache(cache)
         self.cache = cache
+        self.progress = progress
 
     def add(self, path):
         return self.cache.add(path, root=self.root)
 
     def traverse(self):
         tree = {}
+        self.progress.total = sum(
+                                  len(files)
+                                  for _, _, files in
+                                  os.walk(self.root))
         for root, subs, files in os.walk(self.root):
             folder_content = self._process_folder(root, files)
             obj = {
@@ -143,6 +150,67 @@ class LevelDBStore(NullStore):
         return self.db.put(key, value)
 
 
+class Progress(object):
+    def __init__(self, total=None):
+        self.progress = 0
+        self.total = total
+        self.silent = False
+        self.dirty = False
+        self.buffer = ''
+
+    def log(self, line):
+        self.reset()
+        log(self.buffer + line)
+        self.buffer = ''
+        self.update()
+
+    def log_n(self, chunk):
+        self.reset()
+        self.buffer += chunk
+        log_n(self.buffer)
+        self.update()
+
+    def log_size(self, path):
+        self.reset()
+        size = os.path.getsize(path)
+        size = human_size(size)
+        self.log_n('%s ... ' % size)
+        self.update()
+
+    def update(self):
+        if self.silent:
+            return
+
+        if not self.dirty:
+            log('')
+            self.dirty = True
+
+        if self.total:
+            log_n('\r[%%] %d / %d' % (self.progress, self.total))
+        else:
+            log_n('\r[%%] %d / ??' % (self.progress))
+
+    def finish(self):
+        self.reset()
+        self.dirty = True
+        self.update()
+        log('')
+        self.silent = True
+
+    def reset(self):
+        if self.silent:
+            return
+
+        if self.dirty:
+            log_n('\033[1A\r')
+            self.dirty = False
+
+        log_n('\033[2K\r')
+
+    def increase(self, num=1):
+        self.progress += num
+
+
 def log(line):
     print(line, file=sys.stderr)
 
@@ -157,12 +225,6 @@ def human_size(num, suffix='B'):
             return '%3.1f %s%s' % (num, unit, suffix)
         num /= 1024.0
     return '%.1f %s%s' % (num, 'Yi', suffix)
-
-
-def log_size(path):
-    size = os.path.getsize(path)
-    size = human_size(size)
-    log_n('%s ... ' % size)
 
 
 def ipfs(cmd):
@@ -223,9 +285,11 @@ def resolve(root, tree):
 def mirror(folder, cache=None):
     'Mirror a folder'
 
-    cache = Cache(cache)
-    walker = FolderWalker(folder, cache)
+    progress = Progress()
+    cache = Cache(cache, progress=progress)
+    walker = FolderWalker(folder, cache, progress=progress)
     tree = walker.traverse()
+    progress.finish()
     cache.close()
 
     return resolve(folder, tree)
