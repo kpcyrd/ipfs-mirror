@@ -2,6 +2,7 @@
 from argh import ArghParser, arg, dispatch, wrap_errors
 import plyvel
 import subprocess
+import json
 import sys
 import os
 
@@ -278,6 +279,38 @@ def ipfs_patch_dir(content, root=None):
     return folder
 
 
+def stat(multihash):
+    def parse(output):
+        for line in output.split('\n'):
+            yield line.split(': ')
+
+    output = ipfs(['object', 'stat', '--', multihash])
+    return {key: value for key, value in parse(output)}
+
+
+def put(obj):
+    p = subprocess.Popen(['ipfs', 'object', 'put'], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+    data = json.dumps(obj).encode('utf-8')
+    stdout, _ = p.communicate(data)
+    output = str(stdout, 'utf-8').strip()
+    return output.split(' ')[1] # TODO: find a cleaner way
+
+
+def files2obj(files):
+    ipfs_obj = {'Links':[],'Data':'\u0008\u0001'}
+
+    for name, multihash in files.items():
+        x = stat(multihash)
+        y = {
+            'Name': name,
+            'Hash': multihash,
+            'Size': int(x['CumulativeSize'])
+        }
+        ipfs_obj['Links'].append(y)
+
+    return ipfs_obj
+
+
 def resolve(root, tree):
     obj = tree[root]
 
@@ -285,8 +318,12 @@ def resolve(root, tree):
         path = os.path.join(root, folder)
         obj['files'][folder] = resolve(path, tree)
 
-    resolved = ipfs_patch_dir(obj['files'], root=root)
-    log('[+] resolved %r -> %s' % (root, resolved))
+    log_n('[*] resolving %r ... ' % root)
+
+    ipfs_obj = files2obj(obj['files'])
+    resolved = put(ipfs_obj)
+
+    log(resolved)
     return resolved
 
 
