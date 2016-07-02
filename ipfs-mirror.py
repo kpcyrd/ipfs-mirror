@@ -156,7 +156,7 @@ class LevelDBStore(NullStore):
 
 
 class Progress(object):
-    def __init__(self, total=None):
+    def __init__(self, total=-1):
         self.progress = 0
         self.total = total
         self.silent = False
@@ -190,10 +190,10 @@ class Progress(object):
             log('')
             self.dirty = True
 
-        if self.total:
-            log_n('\r[%%] %d / %d' % (self.progress, self.total))
-        else:
+        if self.total < 0:
             log_n('\r[%%] %d / ??' % (self.progress))
+        else:
+            log_n('\r[%%] %d / %d' % (self.progress, self.total))
 
     def finish(self):
         self.reset()
@@ -309,7 +309,7 @@ def put(obj):
     return output.split(' ')[1] # TODO: find a cleaner way
 
 
-def files2obj(files, stat_db=None):
+def files2obj(files, stat_db=None, progress=None):
     ipfs_obj = {'Links':[],'Data':'\u0008\u0001'}
 
     for name, multihash in files.items():
@@ -320,6 +320,9 @@ def files2obj(files, stat_db=None):
             'Size': int(x['CumulativeSize'])
         }
         ipfs_obj['Links'].append(y)
+        if progress:
+            progress.increase()
+            progress.log_n('')
 
     return ipfs_obj
 
@@ -331,12 +334,15 @@ def resolve(root, tree, stat_db=None):
         path = os.path.join(root, folder)
         obj['files'][folder] = resolve(path, tree, stat_db=stat_db)
 
-    log_n('[*] resolving %r ... ' % root)
 
-    ipfs_obj = files2obj(obj['files'], stat_db=stat_db)
+    total = len(obj['files'].items())
+    progress = Progress(total)
+    progress.log_n('[*] resolving %r ... ' % root)
+    ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
     resolved = put(ipfs_obj)
+    progress.log(resolved)
+    progress.finish()
 
-    log(resolved)
     return resolved
 
 
