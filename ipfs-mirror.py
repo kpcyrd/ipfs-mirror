@@ -52,7 +52,7 @@ class Cache(object):
         else:
             multihash = self.db.get(path)
             if multihash:
-                self.progress.log_n('HIT ...')
+                self.progress.log_n('HIT ... ')
             else:
                 self.progress.log_n('MISS ... ')
                 self.progress.log_size(path)
@@ -198,6 +198,7 @@ class Progress(object):
         self.dirty = True
         self.update()
         log('')
+        self.reset_line()
         self.silent = True
 
     def reset(self):
@@ -208,6 +209,10 @@ class Progress(object):
             log_n('\033[1A\r')
             self.dirty = False
 
+        self.reset_line()
+        log_n('\033[2K\r')
+
+    def reset_line(self):
         log_n('\033[2K\r')
 
     def increase(self, num=1):
@@ -225,7 +230,7 @@ def log_n(chunk):
 def human_size(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
-            return '%3.1f %s%s' % (num, unit, suffix)
+            return '%5.1f %-3s%s' % (num, unit, suffix)
         num /= 1024.0
     return '%.1f %s%s' % (num, 'Yi', suffix)
 
