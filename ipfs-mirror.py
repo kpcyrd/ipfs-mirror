@@ -230,7 +230,7 @@ def log_n(chunk):
 def human_size(num, suffix='B'):
     for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei', 'Zi']:
         if abs(num) < 1024.0:
-            return '%5.1f %-3s%s' % (num, unit, suffix)
+            return '%5.1f %3s%s' % (num, unit, suffix)
         num /= 1024.0
     return '%.1f %s%s' % (num, 'Yi', suffix)
 
@@ -269,9 +269,11 @@ def merge(root, name, multihash):
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
 
 
-def ipfs_patch_dir(content):
+def ipfs_patch_dir(content, root=None):
     folder = empty()
     for name, multihash in content.items():
+        if root:
+            log('[*] adding   %r / %r / %r / %r' % (root, folder, multihash, name))
         folder = merge(folder, name, multihash)
     return folder
 
@@ -283,7 +285,7 @@ def resolve(root, tree):
         path = os.path.join(root, folder)
         obj['files'][folder] = resolve(path, tree)
 
-    resolved = ipfs_patch_dir(obj['files'])
+    resolved = ipfs_patch_dir(obj['files'], root=root)
     log('[+] resolved %r -> %s' % (root, resolved))
     return resolved
 
