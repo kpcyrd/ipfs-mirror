@@ -10,17 +10,18 @@ import os
 class Cache(object):
     def __init__(self, path=None, progress=None):
         self.path = path
-        self.db = self.open()
+        self.db = self.open('cache.db')
+        self.stat_db = self.open('stat.db')
         self.progress = progress
         self.filter = list(self.load_filter())
 
     def ensure_exists(self):
         os.makedirs(self.path, exist_ok=True)
 
-    def open(self):
+    def open(self, name='cache.db'):
         if self.path:
             self.ensure_exists()
-            path = os.path.join(self.path, 'cache.db')
+            path = os.path.join(self.path, name)
             return LevelDBStore(path)
         else:
             return NullStore(self.path)
@@ -279,13 +280,25 @@ def ipfs_patch_dir(content, root=None):
     return folder
 
 
-def stat(multihash):
+def stat(multihash, db=None):
     def parse(output):
         for line in output.split('\n'):
             yield line.split(': ')
 
+    if db:
+        cached = db.get(multihash)
+        if cached:
+            return json.loads(cached)
+        elif type(db) is not NullStore:
+            log_n('MISS ... ')
+
     output = ipfs(['object', 'stat', '--', multihash])
-    return {key: value for key, value in parse(output)}
+    obj = {key: value for key, value in parse(output)}
+
+    if db:
+        db.put(multihash, json.dumps(obj))
+
+    return obj
 
 
 def put(obj):
@@ -296,11 +309,11 @@ def put(obj):
     return output.split(' ')[1] # TODO: find a cleaner way
 
 
-def files2obj(files):
+def files2obj(files, stat_db=None):
     ipfs_obj = {'Links':[],'Data':'\u0008\u0001'}
 
     for name, multihash in files.items():
-        x = stat(multihash)
+        x = stat(multihash, db=stat_db)
         y = {
             'Name': name,
             'Hash': multihash,
@@ -311,16 +324,16 @@ def files2obj(files):
     return ipfs_obj
 
 
-def resolve(root, tree):
+def resolve(root, tree, stat_db=None):
     obj = tree[root]
 
     for folder in obj['folders']:
         path = os.path.join(root, folder)
-        obj['files'][folder] = resolve(path, tree)
+        obj['files'][folder] = resolve(path, tree, stat_db=stat_db)
 
     log_n('[*] resolving %r ... ' % root)
 
-    ipfs_obj = files2obj(obj['files'])
+    ipfs_obj = files2obj(obj['files'], stat_db=stat_db)
     resolved = put(ipfs_obj)
 
     log(resolved)
@@ -339,7 +352,7 @@ def mirror(folder, cache=None):
     progress.finish()
     cache.close()
 
-    return resolve(folder, tree)
+    return resolve(folder, tree, stat_db=cache.stat_db)
 
 
 @wrap_errors([KeyboardInterrupt])
