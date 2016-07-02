@@ -289,8 +289,6 @@ def stat(multihash, db=None):
         cached = db.get(multihash)
         if cached:
             return json.loads(cached)
-        elif type(db) is not NullStore:
-            log_n('MISS ... ')
 
     output = ipfs(['object', 'stat', '--', multihash])
     obj = {key: value for key, value in parse(output)}
