@@ -60,7 +60,7 @@ class Cache(object):
                 self.db.put(path, multihash)
 
         self.progress.increase()
-        self.progress.log('%r' % multihash)
+        self.progress.log('%s' % multihash)
         return multihash
 
     def skips_cache(self, root, path):
@@ -273,7 +273,7 @@ def ipfs_patch_dir(content, root=None):
     folder = empty()
     for name, multihash in content.items():
         if root:
-            log('[*] adding   %r / %r / %r / %r' % (root, folder, multihash, name))
+            log('[*] adding   %r / %s/%s / %r' % (root, folder, multihash, name))
         folder = merge(folder, name, multihash)
     return folder
 
