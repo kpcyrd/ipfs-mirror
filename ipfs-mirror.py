@@ -98,6 +98,9 @@ class FolderWalker(object):
                                   for _, _, files in
                                   os.walk(self.root))
         for root, subs, files in os.walk(self.root):
+            subs.sort()
+            files.sort()
+
             folder_content = self._process_folder(root, files)
             obj = {
                 'folders': subs,
