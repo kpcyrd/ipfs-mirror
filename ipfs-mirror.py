@@ -12,6 +12,7 @@ class Cache(object):
         self.path = path
         self.db = self.open('cache.db')
         self.stat_db = self.open('stat.db')
+        self._goipfs_2938_db = self.open('_goipfs_2938.db')
         self.progress = progress
         self.filter = list(self.load_filter())
 
@@ -271,13 +272,25 @@ def merge(root, name, multihash):
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
 
 
-def ipfs_patch_dir(content, progress=None):
+def ipfs_patch_dir(content, progress=None, _goipfs_2938_db=None):
     folder = empty()
-    for name, multihash in content.items():
+    for name, multihash in sorted(content.items()):
+        _key = '%r/%r/%r' % (folder, multihash, name)
+        _value = None
+
+        if _goipfs_2938_db:
+            _value = _goipfs_2938_db.get(_key)
+
+        if _value:
+            folder = _value
+        else:
+            folder = merge(folder, name, multihash)
+            if _goipfs_2938_db:
+                _goipfs_2938_db.put(_key, folder)
+
         if progress:
             progress.increase()
             progress.update()
-        folder = merge(folder, name, multihash)
     return folder
 
 
@@ -326,12 +339,12 @@ def files2obj(files, stat_db=None, progress=None):
     return ipfs_obj
 
 
-def resolve(root, tree, stat_db=None):
+def resolve(root, tree, stat_db=None, _goipfs_2938_db=None):
     obj = tree[root]
 
     for folder in obj['folders']:
         path = os.path.join(root, folder)
-        obj['files'][folder] = resolve(path, tree, stat_db=stat_db)
+        obj['files'][folder] = resolve(path, tree, stat_db=stat_db, _goipfs_2938_db=_goipfs_2938_db)
 
 
     total = len(obj['files'].items())
@@ -340,7 +353,7 @@ def resolve(root, tree, stat_db=None):
 
     #ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
     #resolved = put(ipfs_obj)
-    resolved = ipfs_patch_dir(obj['files'], progress=progress) # TODO
+    resolved = ipfs_patch_dir(obj['files'], _goipfs_2938_db=_goipfs_2938_db, progress=progress) # TODO
 
     progress.log(resolved)
     progress.finish()
@@ -360,7 +373,7 @@ def mirror(folder, cache=None):
     progress.finish()
     cache.close()
 
-    return resolve(folder, tree, stat_db=cache.stat_db)
+    return resolve(folder, tree, stat_db=cache.stat_db, _goipfs_2938_db=cache._goipfs_2938_db)
 
 
 @wrap_errors([KeyboardInterrupt])
