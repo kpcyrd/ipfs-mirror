@@ -271,11 +271,12 @@ def merge(root, name, multihash):
     return ipfs(['object', 'patch', root, 'add-link', name, multihash])
 
 
-def ipfs_patch_dir(content, root=None):
+def ipfs_patch_dir(content, progress=None):
     folder = empty()
     for name, multihash in content.items():
-        if root:
-            log('[*] adding   %r / %s/%s / %r' % (root, folder, multihash, name))
+        if progress:
+            progress.increase()
+            progress.update()
         folder = merge(folder, name, multihash)
     return folder
 
@@ -320,7 +321,7 @@ def files2obj(files, stat_db=None, progress=None):
         ipfs_obj['Links'].append(y)
         if progress:
             progress.increase()
-            progress.log_n('')
+            progress.update()
 
     return ipfs_obj
 
@@ -336,8 +337,11 @@ def resolve(root, tree, stat_db=None):
     total = len(obj['files'].items())
     progress = Progress(total)
     progress.log_n('[*] resolving %r ... ' % root)
-    ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
-    resolved = put(ipfs_obj)
+
+    #ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
+    #resolved = put(ipfs_obj)
+    resolved = ipfs_patch_dir(obj['files'], progress=progress) # TODO
+
     progress.log(resolved)
     progress.finish()
 
