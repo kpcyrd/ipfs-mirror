@@ -357,9 +357,9 @@ def resolve(root, tree, stat_db=None, _goipfs_2938_db=None):
     progress = Progress(total)
     progress.log_n('[*] resolving %r ... ' % root)
 
-    #ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
-    #resolved = put(ipfs_obj)
-    resolved = ipfs_patch_dir(obj['files'], _goipfs_2938_db=_goipfs_2938_db, progress=progress) # TODO
+    ipfs_obj = files2obj(obj['files'], stat_db=stat_db, progress=progress)
+    resolved = put(ipfs_obj)
+    #resolved = ipfs_patch_dir(obj['files'], _goipfs_2938_db=_goipfs_2938_db, progress=progress) # TODO
 
     progress.log(resolved)
     progress.finish()
