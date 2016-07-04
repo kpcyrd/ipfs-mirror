@@ -157,6 +157,8 @@ class LevelDBStore(NullStore):
 
 
 class Progress(object):
+    text_only = False
+
     def __init__(self, total=-1):
         self.progress = 0
         self.total = total
@@ -173,7 +175,8 @@ class Progress(object):
     def log_n(self, chunk):
         self.reset()
         self.buffer += chunk
-        log_n(self.buffer)
+        if not Progress.text_only:
+            log_n(self.buffer)
         self.update()
 
     def log_size(self, path):
@@ -184,7 +187,7 @@ class Progress(object):
         self.update()
 
     def update(self):
-        if self.silent:
+        if self.silent or Progress.text_only:
             return
 
         if not self.dirty:
@@ -197,6 +200,8 @@ class Progress(object):
             log_n('\r[%%] %d / %d' % (self.progress, self.total))
 
     def finish(self):
+        if Progress.text_only:
+            return
         self.reset()
         self.dirty = True
         self.update()
@@ -205,7 +210,7 @@ class Progress(object):
         self.silent = True
 
     def reset(self):
-        if self.silent:
+        if self.silent or Progress.text_only:
             return
 
         if self.dirty:
@@ -216,7 +221,8 @@ class Progress(object):
         log_n('\033[2K\r')
 
     def reset_line(self):
-        log_n('\033[2K\r')
+        if not Progress.text_only:
+            log_n('\033[2K\r')
 
     def increase(self, num=1):
         self.progress += num
@@ -363,8 +369,10 @@ def resolve(root, tree, stat_db=None, _goipfs_2938_db=None):
 
 @arg('--cache', metavar='path', help='cache location')
 @wrap_errors([KeyboardInterrupt])
-def mirror(folder, cache=None):
+def mirror(folder, cache=None, text_only=False):
     'Mirror a folder'
+
+    Progress.text_only = text_only
 
     progress = Progress()
     cache = Cache(cache, progress=progress)
