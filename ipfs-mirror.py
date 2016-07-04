@@ -15,6 +15,7 @@ class Cache(object):
         self._goipfs_2938_db = self.open('_goipfs_2938.db')
         self.progress = progress
         self.filter = list(self.load_filter())
+        self.silent = False
 
     def ensure_exists(self):
         os.makedirs(self.path, exist_ok=True)
@@ -55,7 +56,11 @@ class Cache(object):
         else:
             multihash = self.db.get(path)
             if multihash:
-                self.progress.log_n('HIT ... ')
+                if self.silent:
+                    self.progress.buffer = ''
+                    return multihash
+                else:
+                    self.progress.log_n('HIT ... ')
             else:
                 self.progress.log_n('MISS ... ')
                 self.progress.log_size(path)
@@ -369,13 +374,14 @@ def resolve(root, tree, stat_db=None, _goipfs_2938_db=None):
 
 @arg('--cache', metavar='path', help='cache location')
 @wrap_errors([KeyboardInterrupt])
-def mirror(folder, cache=None, text_only=False):
+def mirror(folder, cache=None, text_only=False, silent=False):
     'Mirror a folder'
 
     Progress.text_only = text_only
 
     progress = Progress()
     cache = Cache(cache, progress=progress)
+    cache.silent = silent
     walker = FolderWalker(folder, cache, progress=progress)
     tree = walker.traverse()
     progress.finish()
